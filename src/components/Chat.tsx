@@ -20,6 +20,7 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | undefined>(undefined)
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null)
   const [imageData, setImageData] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -34,9 +35,29 @@ export default function Chat() {
     const check = async () => {
       try {
         const ok = await health()
-        if (isActive) setIsHealthy(ok)
+        if (isActive) {
+          const prevHealthy = isHealthy
+          setIsHealthy(ok)
+          
+          // Show toast when status changes
+          if (prevHealthy !== null && prevHealthy !== ok) {
+            if (ok) {
+              setToast({ message: '✅ Backend connected', type: 'success' })
+            } else {
+              setToast({ message: '❌ Backend disconnected', type: 'error' })
+            }
+          }
+        }
       } catch {
-        if (isActive) setIsHealthy(false)
+        if (isActive) {
+          const prevHealthy = isHealthy
+          setIsHealthy(false)
+          
+          // Show toast when status changes to disconnected
+          if (prevHealthy !== null && prevHealthy !== false) {
+            setToast({ message: '❌ Backend disconnected', type: 'error' })
+          }
+        }
       }
     }
     const id = setInterval(check, 5000)
@@ -44,14 +65,32 @@ export default function Chat() {
       isActive = false
       clearInterval(id)
     }
-  }, [])
+  }, [isHealthy])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+    if (scrollRef.current) {
+      // Use smooth scrolling with a slight delay to ensure content is rendered
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ 
+          top: scrollRef.current.scrollHeight,
+          behavior: 'smooth'
+        })
+      }, 50)
+    }
   }, [messages])
 
+  // Auto-hide toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
+
   const placeholder = useMemo(() => {
-    if (isHealthy === false) return 'Backend not reachable. Try again later...'
+    if (isHealthy === false) return '⚠ Backend not reachable. Try again later...'
     if (isSending) return 'Sending...'
     return 'Ask about products, styles, budgets, etc.'
   }, [isHealthy, isSending])
@@ -104,14 +143,23 @@ export default function Chat() {
   return (
     <div className="chat-container">
       <div className="chat-header">
-        <div className="chat-title">Palona Shopping Agent</div>
+        <div className="chat-title">AI.sle</div>
         <div className={`status-dot ${isHealthy ? 'ok' : isHealthy === false ? 'bad' : 'unknown'}`} />
       </div>
       <div className="chat-history" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="empty-state">
-            <div className="empty-title">Ask me to find products for you</div>
-            <div className="empty-tip">Examples: "Under $50 black sneakers", "Show similar to my photo"</div>
+            {isHealthy === false ? (
+              <>
+                <div className="empty-title">⚠️ Backend Not Connected</div>
+                <div className="empty-tip">Please check that the backend server is running and try again.</div>
+              </>
+            ) : (
+              <>
+                <div className="empty-title">Ask me to find products for you</div>
+                <div className="empty-tip">Examples: "Men's black sneakers", "Show similar to my photo", "Need help choosing a gift"</div>
+              </>
+            )}
           </div>
         )}
         {messages.map((m) => (
@@ -144,7 +192,7 @@ export default function Chat() {
               </ReactMarkdown>
               {m.role === 'user' && m.hasImage && (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                  <span style={{ background: 'var(--accent)', color: '#555', border: '1px solid var(--border)', borderRadius: 999, fontSize: 11, padding: '4px 8px' }}>Image attached</span>
+                  <span style={{ background: 'var(--accent)', color: '#555', border: '1px solid var(--border)', borderRadius: 999, fontSize: 13, padding: '4px 8px' }}>Image attached</span>
                 </div>
               )}
               {m.role === 'assistant' && Array.isArray(m.products) && m.products.length > 0 && (
@@ -162,10 +210,10 @@ export default function Chat() {
                             <img src={img} alt={title} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover' }} />
                           </div>
                         )}
-                        <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={title}>
+                        <div style={{ fontWeight: 600, fontSize: 16, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={title}>
                           {title}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, color: 'var(--text)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 15, color: 'var(--text)' }}>
                           <span style={{ fontWeight: 700 }}>{price}</span>
                           <span style={{ color: 'var(--muted)' }}>{rating ? `${rating}★` : ''}</span>
                         </div>
@@ -196,12 +244,30 @@ export default function Chat() {
       <form className="chat-input" onSubmit={onSubmit}>
         <div className="input-combo" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: '6px 8px' }}>
           {!imageData ? (
-            <label className="upload-btn" title="Attach image" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '6px 10px', borderRadius: 8, background: '#f2f2f2', color: '#555', fontSize: 12, border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <label 
+              className="upload-btn" 
+              title={isHealthy === false ? "Backend not available" : "Attach image"} 
+              style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                padding: '6px 10px', 
+                borderRadius: 8, 
+                background: isHealthy === false ? '#f8f8f8' : '#f2f2f2', 
+                color: isHealthy === false ? '#999' : '#555', 
+                fontSize: 14, 
+                border: '1px solid var(--border)', 
+                cursor: isHealthy === false ? 'not-allowed' : 'pointer', 
+                whiteSpace: 'nowrap',
+                opacity: isHealthy === false ? 0.6 : 1
+              }}
+            >
               + Attach image
               <input
                 type="file"
                 accept="image/*"
                 style={{ display: 'none' }}
+                disabled={isHealthy === false}
                 onChange={async (e) => {
                   const file = e.target.files?.[0]
                   if (!file) return
@@ -219,7 +285,7 @@ export default function Chat() {
               type="button"
               onClick={() => setImageData(null)}
               title="Remove image"
-              style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--accent)', color: '#555', fontSize: 12, border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--accent)', color: '#555', fontSize: 14, border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background = '#ffdddd'
                 ;(e.currentTarget as HTMLButtonElement).style.color = '#a33'
@@ -249,6 +315,31 @@ export default function Chat() {
         </button>
       </form>
       {sessionId && <div className="session-id">Session: {sessionId}</div>}
+      
+      {/* Toast notification */}
+      {toast && (
+        <div 
+          className="toast"
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            background: toast.type === 'success' ? '#4CAF50' : '#f44336',
+            color: 'white',
+            padding: '12px 16px',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 500,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: 1000,
+            animation: 'slideInRight 0.3s ease-out',
+            cursor: 'pointer'
+          }}
+          onClick={() => setToast(null)}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   )
 }
