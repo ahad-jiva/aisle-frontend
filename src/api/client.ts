@@ -3,6 +3,22 @@ const API_BASE: string = import.meta.env.VITE_API_BASE_URL || ''
 export interface ChatRequestBody {
   message: string
   sessionId?: string | null
+  image_search?: boolean
+  image_data?: string | null
+}
+
+export interface ProductCard {
+  id?: string
+  title?: string
+  price?: number
+  rating?: number
+  category?: string
+  image_url?: string
+  imgURL?: string
+  imgUrl?: string
+  product_url?: string
+  productURL?: string
+  description?: string
 }
 
 interface ChatResponseFlex {
@@ -12,9 +28,10 @@ interface ChatResponseFlex {
   reply?: string
   sessionId?: string
   session_id?: string
+  products?: ProductCard[]
 }
 
-export async function chat(request: ChatRequestBody): Promise<{ reply: string; sessionId?: string }> {
+export async function chat(request: ChatRequestBody): Promise<{ reply: string; sessionId?: string; products: ProductCard[] }> {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: {
@@ -30,7 +47,8 @@ export async function chat(request: ChatRequestBody): Promise<{ reply: string; s
   const data: ChatResponseFlex = await res.json()
   const reply = data.message ?? data.response ?? data.text ?? data.reply ?? ''
   const sessionId = data.sessionId ?? data.session_id
-  return { reply, sessionId }
+  const products = Array.isArray(data.products) ? data.products : []
+  return { reply, sessionId, products }
 }
 
 type ProductSearchResponseFlex = {
