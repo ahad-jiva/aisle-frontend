@@ -1,2 +1,3 @@
-# palona-frontend
+# Palona Frontend
+
 Frontend for palona-test
